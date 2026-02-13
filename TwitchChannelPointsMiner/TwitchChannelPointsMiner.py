@@ -21,6 +21,7 @@ from TwitchChannelPointsMiner.classes.Exceptions import StreamerDoesNotExistExce
 from TwitchChannelPointsMiner.classes.Settings import FollowersOrder, Priority, Settings
 from TwitchChannelPointsMiner.classes.Twitch import Twitch
 from TwitchChannelPointsMiner.classes.WebSocketsPool import WebSocketsPool
+from TwitchChannelPointsMiner.classes.ConfigManager import ConfigManager
 from TwitchChannelPointsMiner.logger import LoggerSettings, configure_loggers
 from TwitchChannelPointsMiner.utils import (
     _millify,
@@ -147,16 +148,40 @@ class TwitchChannelPointsMiner:
         def _login_notify(message):
             import time as _time
             _time.sleep(3)  # Give bots a moment to connect
-            if self.telegram_control:
+            
+            # Check source of the last command
+            cm = ConfigManager()
+            source = cm.get_last_command_source()
+            
+            sent = False
+            if source == "telegram" and self.telegram_control:
                 try:
                     self.telegram_control.send_message(message)
+                    sent = True
                 except Exception:
                     pass
-            if self.discord_control:
+            elif source == "discord" and self.discord_control:
                 try:
                     self.discord_control.send_sync(message)
+                    sent = True
                 except Exception:
                     pass
+            
+            # Fallback: if no source or specific send failed, try sending to both
+            if not sent:
+                if self.telegram_control:
+                    try:
+                        self.telegram_control.send_message(message)
+                    except Exception:
+                        pass
+                if self.discord_control:
+                    try:
+                        self.discord_control.send_sync(message)
+                    except Exception:
+                        pass
+            
+            # Clear source after successful login attempt (or at least notification)
+            cm.clear_last_command_source()
 
         self.twitch = Twitch(self.username, user_agent, password, notify_callback=_login_notify)
 

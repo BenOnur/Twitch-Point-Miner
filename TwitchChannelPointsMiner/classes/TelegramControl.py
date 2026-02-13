@@ -246,6 +246,14 @@ class TelegramControl(threading.Thread):
         os.kill(os.getpid(), signal.SIGTERM)
 
     def _cmd_start(self):
+        # Kaynak kaydını temizle - manuel start her zaman geneldir veya kayıt gerekmez
+        # Ancak 2FA beklentisi varsa manuel startta kaynak belirtilebilir.
+        # Kullanıcı isteği: "account add komutu kimden girildiyse onu takip et"
+        # Bu yüzden manuel start'ta kaynak belirtmiyoruz veya var olanı koruyoruz.
+        if self.config_manager:
+            # Manuel start'ta kaynağı temizleyelim ki yanlış yere gitmesin
+            self.config_manager.clear_last_command_source()
+
         self.send_message(
             "🔄 Miner yeniden başlatılıyor...\n"
             "PM2 otomatik olarak tekrar başlatacak."
@@ -267,14 +275,17 @@ class TelegramControl(threading.Thread):
 
         if sub == "add":
             if len(args) < 3:
-                self.send_message("Kullanım: /account add &lt;kullanıcı&gt; &lt;şifre&gt;")
+                self.send_message("Kullanım: /account add <kullanıcı> <şifre>")
                 return
             username = args[1]
             password = args[2]
             slot, msg = self.config_manager.add_account(username, password)
             self.send_message(msg)
             if slot:
-                self.send_message("💡 Değişikliklerin geçerli olması için /start ile yeniden başlat.")
+                self.send_message("🔄 Otomatik yeniden başlatılıyor...")
+                # Kaynağı kaydet ki 2FA kodu buraya gelsin
+                self.config_manager.set_last_command_source("telegram")
+                os.kill(os.getpid(), signal.SIGTERM)
 
         elif sub == "list":
             accounts = self.config_manager.list_accounts()
@@ -302,7 +313,9 @@ class TelegramControl(threading.Thread):
             msg = self.config_manager.remove_account(slot)
             self.send_message(msg)
             if "✅" in msg:
-                self.send_message("💡 Değişikliklerin geçerli olması için /start ile yeniden başlat.")
+                self.send_message("🔄 Değişiklikler için yeniden başlatılıyor...")
+                self.config_manager.clear_last_command_source()
+                os.kill(os.getpid(), signal.SIGTERM)
 
         else:
             self.send_message("Kullanım:\n/account add &lt;kullanıcı&gt; &lt;şifre&gt;\n/account list\n/account remove &lt;slot&gt;")
@@ -328,7 +341,14 @@ class TelegramControl(threading.Thread):
             msg = self.config_manager.add_channel(channel)
             self.send_message(msg)
             if "✅" in msg:
-                self.send_message("💡 Değişikliklerin geçerli olması için /start ile yeniden başlat.")
+                # Kanal ekleyince de restart atalım (özellikle ilk kurulumda önemli)
+                if self.config_manager.has_valid_config() or (self.miner and self.miner.running):
+                    self.send_message("🔄 Otomatik yeniden başlatılıyor...")
+                    # Kanal ekleme genellikle 2FA gerektirmez ama tutarlılık için kaynak belirtilebilir
+                    # self.config_manager.set_last_command_source("telegram")
+                    os.kill(os.getpid(), signal.SIGTERM)
+                else:
+                    self.send_message("💡 Kanal eklendi. Hesap da ekleyince otomatik başlayacak.")
 
         elif sub == "remove":
             if len(args) < 2:
@@ -338,7 +358,8 @@ class TelegramControl(threading.Thread):
             msg = self.config_manager.remove_channel(channel)
             self.send_message(msg)
             if "✅" in msg:
-                self.send_message("💡 Değişikliklerin geçerli olması için /start ile yeniden başlat.")
+                self.send_message("🔄 Değişiklikler için yeniden başlatılıyor...")
+                os.kill(os.getpid(), signal.SIGTERM)
 
         elif sub == "list":
             channels = self.config_manager.list_channels()

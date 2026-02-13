@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "accounts": [],
     "channels": [],
     "active_account": None,
+    "last_command_source": None,
 }
 
 
@@ -161,3 +162,22 @@ class ConfigManager:
                 and len(self.config["channels"]) > 0
                 and self.config["active_account"] is not None
             )
+
+    # ── Command Source Tracking ──────────────────────────────────
+
+    def set_last_command_source(self, source: str):
+        """Save which platform sent the last /start command ('telegram' or 'discord')."""
+        with self.lock:
+            self.config["last_command_source"] = source
+            self._save()
+
+    def get_last_command_source(self) -> str:
+        """Get which platform sent the last /start command."""
+        with self.lock:
+            return self.config.get("last_command_source")
+
+    def clear_last_command_source(self):
+        """Clear last command source after use."""
+        with self.lock:
+            self.config["last_command_source"] = None
+            self._save()

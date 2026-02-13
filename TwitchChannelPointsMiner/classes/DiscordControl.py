@@ -200,6 +200,10 @@ class DiscordControl(threading.Thread):
         return "🛑 Miner durduruluyor..."
 
     def _cmd_start(self):
+        # Kaynak kaydını temizle - manuel start her zaman geneldir
+        if self.config_manager:
+            self.config_manager.clear_last_command_source()
+        
         os.kill(os.getpid(), signal.SIGTERM)
         return "🔄 Miner yeniden başlatılıyor...\nPM2 otomatik olarak tekrar başlatacak."
 
@@ -221,7 +225,18 @@ class DiscordControl(threading.Thread):
             password = args[2]
             slot, msg = self.config_manager.add_account(username, password)
             if slot:
-                msg += "\n💡 Değişikliklerin geçerli olması için `t!start` ile yeniden başlat."
+                # Kaynağı kaydet ki 2FA kodu buraya gelsin
+                self.config_manager.set_last_command_source("discord")
+                # Mesajı gönderip öyle kapatmamız lazım, biraz bekleyebiliriz veya async task başlatabiliriz
+                # Ancak burada basitçe return string yapıyoruz, bu mesaj gittikten sonra process kapanmalı.
+                # Discord.py'da return edilen mesaj gönderildikten sonra process kapanması için 
+                # dispatch'in sonucunu bekleyip işlem yapmamız gerekirdi ama şu anki yapı buna tam uygun değil.
+                # O yüzden mesajı return edip, kısa bir gecikmeyle kapatmayı deneyebiliriz.
+                # Veya kullanıcıya "başlatılıyor" deyip kapatırız.
+                
+                # En temiz yöntem: threading.Timer ile kapatmak
+                threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+                return f"{msg}\n🔄 Otomatik yeniden başlatılıyor..."
             return msg
 
         elif sub == "list":
@@ -246,7 +261,9 @@ class DiscordControl(threading.Thread):
                 return "❌ Slot numarası sayı olmalı."
             msg = self.config_manager.remove_account(slot)
             if "✅" in msg:
-                msg += "\n💡 Değişikliklerin geçerli olması için `t!start` ile yeniden başlat."
+                 self.config_manager.clear_last_command_source()
+                 threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+                 return f"{msg}\n🔄 Değişiklikler için yeniden başlatılıyor..."
             return msg
 
         return "Kullanım:\n`t!account add <kullanıcı> <şifre>`\n`t!account list`\n`t!account remove <slot>`"
@@ -268,7 +285,12 @@ class DiscordControl(threading.Thread):
             channel = args[1].lower().strip()
             msg = self.config_manager.add_channel(channel)
             if "✅" in msg:
-                msg += "\n💡 Değişikliklerin geçerli olması için `t!start` ile yeniden başlat."
+                if self.config_manager.has_valid_config() or (self.miner and self.miner.running):
+                    # self.config_manager.set_last_command_source("discord") # Gerekirse
+                    threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+                    return f"{msg}\n🔄 Otomatik yeniden başlatılıyor..."
+                else:
+                    return f"{msg}\n💡 Kanal eklendi. Hesap da ekleyince otomatik başlayacak."
             return msg
 
         elif sub == "remove":
@@ -277,7 +299,8 @@ class DiscordControl(threading.Thread):
             channel = args[1].lower().strip()
             msg = self.config_manager.remove_channel(channel)
             if "✅" in msg:
-                msg += "\n💡 Değişikliklerin geçerli olması için `t!start` ile yeniden başlat."
+                threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+                return f"{msg}\n🔄 Değişiklikler için yeniden başlatılıyor..."
             return msg
 
         elif sub == "list":
