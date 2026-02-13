@@ -19,11 +19,11 @@ class DiscordLogHandler(logging.Handler):
         if not self.discord_control.logging_enabled:
             return
 
-        # Filter out noisy debug/info logs from libraries
-        if record.levelno < logging.WARNING:
-            name = record.name
-            if name.startswith(("urllib3", "discord", "charset_normalizer", "requests", "asyncio")):
-                return
+        # Only allow TwitchChannelPointsMiner logs (INFO and above)
+        if not record.name.startswith("TwitchChannelPointsMiner"):
+            return
+        if record.levelno < logging.INFO:
+            return
 
         try:
             msg = self.format(record)
@@ -53,7 +53,7 @@ class DiscordControl(threading.Thread):
         self.logging_enabled = False
         self.log_queue = queue.Queue()
         self.log_handler = DiscordLogHandler(self)
-        self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%d/%m/%y %H:%M:%S'))
         
         # Attach to root logger
         logging.getLogger().addHandler(self.log_handler)
@@ -136,7 +136,7 @@ class DiscordControl(threading.Thread):
                     try:
                         channel = self.client.get_channel(self.channel_id)
                         if channel:
-                            await channel.send(f"```\n{text}\n```")
+                            await channel.send(text)
                     except Exception as e:
                         print(f"Failed to send log to Discord: {e}")
             
