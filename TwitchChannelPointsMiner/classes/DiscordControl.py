@@ -185,10 +185,47 @@ class DiscordControl(threading.Thread):
         async def cmd_logs(interaction: discord.Interaction):
             await interaction.response.send_message(control._cmd_logs())
 
-        @tree.command(name="bet", description="Kumar/prediction sistemini aç/kapat")
+        # ── Bet Group ─────────────────────────────────────────────
+        bet_group = app_commands.Group(name="bet", description="Kumar/prediction ayarları")
+
+        @bet_group.command(name="toggle", description="Kumar sistemini aç/kapat")
         @app_commands.check(auth_check)
-        async def cmd_bet(interaction: discord.Interaction):
-            await interaction.response.send_message(control._cmd_bet())
+        async def bet_toggle(interaction: discord.Interaction):
+            await interaction.response.send_message(control._cmd_bet_toggle())
+
+        @bet_group.command(name="status", description="Mevcut kumar ayarlarını göster")
+        @app_commands.check(auth_check)
+        async def bet_status(interaction: discord.Interaction):
+            await interaction.response.send_message(control._cmd_bet_status())
+
+        @bet_group.command(name="set", description="Kumar ayarlarını değiştir")
+        @app_commands.describe(
+            percentage="Bahis yüzdesi (1-100)",
+            max_points="Maksimum bahis puanı",
+            min_points="Minimum puan eşiği (altında bahse girmez)",
+            strategy="Strateji: smart, percentage, high_odds, most_voted",
+            delay="Bahis gecikmesi (saniye)",
+        )
+        @app_commands.check(auth_check)
+        async def bet_set(
+            interaction: discord.Interaction,
+            percentage: int = None,
+            max_points: int = None,
+            min_points: int = None,
+            strategy: str = None,
+            delay: int = None,
+        ):
+            await interaction.response.send_message(
+                control._cmd_bet_set(
+                    percentage=percentage,
+                    max_points=max_points,
+                    min_points=min_points,
+                    strategy=strategy,
+                    delay=delay,
+                )
+            )
+
+        tree.add_command(bet_group)
 
         # ── Account Group ─────────────────────────────────────────
         account_group = app_commands.Group(name="account", description="Hesap yönetimi komutları")
@@ -409,7 +446,7 @@ class DiscordControl(threading.Thread):
             return "📝 **Canlı Loglar açıldı!**\nKonsola düşen veriler buraya akacak."
         return "📝 **Canlı Loglar kapandı!**"
 
-    def _cmd_bet(self):
+    def _cmd_bet_toggle(self):
         if not self.config_manager:
             return "❌ Config yöneticisi bağlı değil."
         new_state = self.config_manager.toggle_predictions()
@@ -427,6 +464,57 @@ class DiscordControl(threading.Thread):
                 "Bot sadece izleme puanı ve claim yapacak.\n"
                 "🔄 Ayar uygulanması için yeniden başlatılıyor..."
             )
+
+    def _cmd_bet_status(self):
+        if not self.config_manager:
+            return "❌ Config yöneticisi bağlı değil."
+        bs = self.config_manager.get_bet_settings()
+        enabled = bs.get("enabled", False)
+        status_icon = "✅ AÇIK" if enabled else "❌ KAPALI"
+
+        strategy_names = {
+            "smart": "🧠 Smart",
+            "percentage": "📊 Percentage",
+            "high_odds": "📈 High Odds",
+            "most_voted": "👥 Most Voted",
+        }
+        strategy = strategy_names.get(bs.get("strategy", "smart"), bs.get("strategy"))
+
+        return (
+            f"🎲 **Kumar Ayarları**\n\n"
+            f"Durum: {status_icon}\n"
+            f"Strateji: {strategy}\n"
+            f"Bahis Yüzdesi: `%{bs.get('percentage', 5)}`\n"
+            f"Max Bahis: `{bs.get('max_points', 50000):,}` puan\n"
+            f"Min Puan Eşiği: `{bs.get('min_points', 20000):,}` puan\n"
+            f"Gecikme: `{bs.get('delay', 6)}` saniye\n\n"
+            f"💡 `/bet set` ile ayarları değiştirebilirsin.\n"
+            f"💡 `/bet toggle` ile açıp kapatabilirsin."
+        )
+
+    def _cmd_bet_set(self, **kwargs):
+        if not self.config_manager:
+            return "❌ Config yöneticisi bağlı değil."
+
+        # Validate strategy
+        if kwargs.get("strategy"):
+            valid_strategies = ["smart", "percentage", "high_odds", "most_voted"]
+            if kwargs["strategy"].lower() not in valid_strategies:
+                return f"❌ Geçersiz strateji!\nGeçerli: {', '.join(valid_strategies)}"
+            kwargs["strategy"] = kwargs["strategy"].lower()
+
+        # Validate percentage
+        if kwargs.get("percentage") is not None:
+            if not (1 <= kwargs["percentage"] <= 100):
+                return "❌ Yüzde 1-100 arası olmalı."
+
+        result = self.config_manager.update_bet_settings(**kwargs)
+
+        if "✅" in result:
+            threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+            result += "\n🔄 Ayar uygulanması için yeniden başlatılıyor..."
+
+        return result
 
     # ── Account Commands ──────────────────────────────────────────
 

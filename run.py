@@ -99,18 +99,26 @@ if not account or not channels:
 
 else:
     # ============================================================
-    # Kumar ayarini config'den oku
-    predictions_enabled = config.get_make_predictions()
+    # Kumar ayarlarini config'den oku
+    bet_cfg = config.get_bet_settings()
+    predictions_enabled = bet_cfg.get("enabled", False)
+
+    STRATEGY_MAP = {
+        "smart": Strategy.SMART,
+        "percentage": Strategy.PERCENTAGE,
+        "high_odds": Strategy.HIGH_ODDS,
+        "most_voted": Strategy.MOST_VOTED,
+    }
 
     bet_config = BetSettings(
-        strategy=Strategy.SMART,
-        percentage=5,
-        percentage_gap=20,
-        max_points=50000,
+        strategy=STRATEGY_MAP.get(bet_cfg.get("strategy", "smart"), Strategy.SMART),
+        percentage=bet_cfg.get("percentage", 5),
+        percentage_gap=bet_cfg.get("percentage_gap", 20),
+        max_points=bet_cfg.get("max_points", 50000),
         stealth_mode=True,
         delay_mode=DelayMode.FROM_END,
-        delay=6,
-        minimum_points=20000,
+        delay=bet_cfg.get("delay", 6),
+        minimum_points=bet_cfg.get("min_points", 20000),
         filter_condition=FilterCondition(
             by=OutcomeKeys.TOTAL_USERS,
             where=Condition.LTE,

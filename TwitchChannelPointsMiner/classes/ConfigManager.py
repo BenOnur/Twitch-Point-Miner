@@ -15,7 +15,15 @@ DEFAULT_CONFIG = {
     "channels": [],
     "active_account": None,
     "last_command_source": None,
-    "make_predictions": False,
+    "bet_settings": {
+        "enabled": False,
+        "strategy": "smart",
+        "percentage": 5,
+        "percentage_gap": 20,
+        "max_points": 50000,
+        "min_points": 20000,
+        "delay": 6,
+    },
 }
 
 
@@ -38,6 +46,16 @@ class ConfigManager:
                 for key, value in DEFAULT_CONFIG.items():
                     if key not in data:
                         data[key] = value
+                # Merge bet_settings sub-keys
+                if "bet_settings" in data and isinstance(data["bet_settings"], dict):
+                    for k, v in DEFAULT_CONFIG["bet_settings"].items():
+                        if k not in data["bet_settings"]:
+                            data["bet_settings"][k] = v
+                # Migrate old make_predictions field
+                if "make_predictions" in data:
+                    if "bet_settings" not in data or not isinstance(data.get("bet_settings"), dict):
+                        data["bet_settings"] = dict(DEFAULT_CONFIG["bet_settings"])
+                    data["bet_settings"]["enabled"] = data.pop("make_predictions")
                 return data
             except Exception as e:
                 logger.error(f"Failed to load config: {e}")
@@ -183,23 +201,38 @@ class ConfigManager:
             self.config["last_command_source"] = None
             self._save()
 
-    # ── Prediction Settings ──────────────────────────────────────
+    # ── Bet / Prediction Settings ────────────────────────────────
+
+    def get_bet_settings(self) -> dict:
+        """Get bet settings dictionary."""
+        with self.lock:
+            return dict(self.config.get("bet_settings", DEFAULT_CONFIG["bet_settings"]))
 
     def get_make_predictions(self) -> bool:
         """Get whether predictions/betting is enabled."""
         with self.lock:
-            return self.config.get("make_predictions", False)
-
-    def set_make_predictions(self, enabled: bool):
-        """Set whether predictions/betting is enabled."""
-        with self.lock:
-            self.config["make_predictions"] = enabled
-            self._save()
+            return self.config.get("bet_settings", {}).get("enabled", False)
 
     def toggle_predictions(self) -> bool:
         """Toggle predictions on/off. Returns new state."""
         with self.lock:
-            current = self.config.get("make_predictions", False)
-            self.config["make_predictions"] = not current
+            bs = self.config.setdefault("bet_settings", dict(DEFAULT_CONFIG["bet_settings"]))
+            bs["enabled"] = not bs.get("enabled", False)
             self._save()
-            return not current
+            return bs["enabled"]
+
+    def update_bet_settings(self, **kwargs) -> str:
+        """Update one or more bet settings. Returns status message."""
+        valid_keys = {"percentage", "percentage_gap", "max_points", "min_points", "delay", "strategy"}
+        with self.lock:
+            bs = self.config.setdefault("bet_settings", dict(DEFAULT_CONFIG["bet_settings"]))
+            updated = []
+            for key, value in kwargs.items():
+                if key in valid_keys and value is not None:
+                    bs[key] = value
+                    updated.append(f"**{key}** → `{value}`")
+            if updated:
+                self._save()
+                return "✅ Ayarlar güncellendi:\n" + "\n".join(updated)
+            return "⚠️ Güncellenecek ayar bulunamadı."
+
