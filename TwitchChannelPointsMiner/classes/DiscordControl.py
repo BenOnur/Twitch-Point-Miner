@@ -16,12 +16,20 @@ class DiscordLogHandler(logging.Handler):
         self.discord_control = discord_control
 
     def emit(self, record):
-        if self.discord_control.logging_enabled:
-            try:
-                msg = self.format(record)
-                self.discord_control.log_queue.put(msg)
-            except Exception:
-                self.handleError(record)
+        if not self.discord_control.logging_enabled:
+            return
+
+        # Filter out noisy debug/info logs from libraries
+        if record.levelno < logging.WARNING:
+            name = record.name
+            if name.startswith(("urllib3", "discord", "charset_normalizer", "requests", "asyncio")):
+                return
+
+        try:
+            msg = self.format(record)
+            self.discord_control.log_queue.put(msg)
+        except Exception:
+            self.handleError(record)
 
 
 class DiscordControl(threading.Thread):
