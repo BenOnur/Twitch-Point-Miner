@@ -10,10 +10,81 @@ logger = logging.getLogger(__name__)
 
 
 class DiscordLogHandler(logging.Handler):
-    """Custom logging handler to send logs to Discord."""
+    """Custom logging handler to send pretty logs to Discord."""
     def __init__(self, discord_control):
         super().__init__()
         self.discord_control = discord_control
+
+    def _prettify(self, msg):
+        """Convert a raw log message into a pretty Discord message with emojis."""
+        # Remove ANSI color codes if present
+        import re
+        msg = re.sub(r'\x1b\[[0-9;]*m', '', msg)
+        
+        # Remove logger prefixes like "[set_online]: " or "[run]: "
+        msg = re.sub(r'^\[[\w_]+\]:\s*', '', msg.strip())
+        
+        # Streamer Online
+        m = re.search(r'Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\) is Online', msg)
+        if m:
+            return f"🟢 **{m.group(1)}** online oldu! — {m.group(2)} puan"
+        
+        # Streamer Offline
+        m = re.search(r'Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\) is Offline', msg)
+        if m:
+            return f"🔴 **{m.group(1)}** offline oldu — {m.group(2)} puan"
+        
+        # Gained channel points
+        m = re.search(r'\+(\d+)\s.*?Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\)', msg)
+        if m:
+            return f"💰 **{m.group(2)}** +{m.group(1)} puan → {m.group(3)}"
+        
+        # Claim bonus
+        if "Claim" in msg and "bonus" in msg.lower():
+            m = re.search(r'Streamer\(username=(\w+)', msg)
+            name = m.group(1) if m else "?"
+            return f"🎁 **{name}** bonus claim edildi!"
+        
+        # Watch streak
+        if "Watch Streak" in msg or "watch streak" in msg:
+            m = re.search(r'Streamer\(username=(\w+)', msg)
+            name = m.group(1) if m else "?"
+            return f"🔥 **{name}** watch streak!"
+        
+        # Prediction / Bet placed
+        if "bet" in msg.lower() or "prediction" in msg.lower():
+            if "won" in msg.lower() or "win" in msg.lower():
+                return f"🏆 {msg.strip()}"
+            elif "lose" in msg.lower() or "lost" in msg.lower():
+                return f"💸 {msg.strip()}"
+            else:
+                return f"🎲 {msg.strip()}"
+        
+        # Drop claimed
+        if "drop" in msg.lower() and "claim" in msg.lower():
+            return f"🎁 {msg.strip()}"
+        
+        # Moment claimed
+        if "moment" in msg.lower():
+            return f"⚡ {msg.strip()}"
+        
+        # Join IRC Chat
+        if "Join IRC Chat" in msg:
+            m = re.search(r'Join IRC Chat:\s*(\w+)', msg)
+            if m:
+                return f"💬 **{m.group(1)}** chat'e katılındı"
+            return f"💬 {msg.strip()}"
+        
+        # Login
+        if "login" in msg.lower() or "Login" in msg:
+            return f"🔐 {msg.strip()}"
+        
+        # Session start
+        if "Start session" in msg:
+            return f"🚀 {msg.strip()}"
+        
+        # Error level
+        return msg.strip()
 
     def emit(self, record):
         if not self.discord_control.logging_enabled:
@@ -26,8 +97,16 @@ class DiscordLogHandler(logging.Handler):
             return
 
         try:
-            msg = self.format(record)
-            self.discord_control.log_queue.put(msg)
+            raw_msg = record.getMessage()
+            pretty = self._prettify(raw_msg)
+            
+            # Add warning/error prefix
+            if record.levelno >= logging.ERROR:
+                pretty = f"❌ **HATA:** {pretty}"
+            elif record.levelno >= logging.WARNING:
+                pretty = f"⚠️ {pretty}"
+            
+            self.discord_control.log_queue.put(pretty)
         except Exception:
             self.handleError(record)
 
