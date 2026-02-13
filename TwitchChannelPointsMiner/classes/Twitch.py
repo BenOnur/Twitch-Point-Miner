@@ -817,7 +817,7 @@ class Twitch(object):
                     for item in response["data"]["channel"]["viewerDropCampaigns"]
                 ]
             )
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, TypeError):
             return []
 
     def __get_inventory(self):

@@ -69,6 +69,8 @@ class TwitchChannelPointsMiner:
         "original_streamers",
         "logs_file",
         "queue_listener",
+        "telegram_control",
+        "discord_control",
     ]
 
     def __init__(
@@ -85,6 +87,9 @@ class TwitchChannelPointsMiner:
         logger_settings: LoggerSettings = LoggerSettings(),
         # Default values for all streamers
         streamer_settings: StreamerSettings = StreamerSettings(),
+        # Control bot settings
+        telegram_control_config: dict = None,
+        discord_control_config: dict = None,
     ):
         # Fixes TypeError: 'NoneType' object is not subscriptable
         if not username or username == "your-twitch-username":
@@ -152,6 +157,35 @@ class TwitchChannelPointsMiner:
         self.running = False
         self.start_datetime = None
         self.original_streamers = []
+
+        # Initialize control bots
+        self.telegram_control = None
+        self.discord_control = None
+
+        # Import ConfigManager for control bots
+        config_manager = None
+        if telegram_control_config or discord_control_config:
+            from TwitchChannelPointsMiner.classes.ConfigManager import ConfigManager
+            config_manager = ConfigManager()
+
+        if telegram_control_config:
+            from TwitchChannelPointsMiner.classes.TelegramControl import TelegramControl
+            self.telegram_control = TelegramControl(
+                token=telegram_control_config["token"],
+                chat_id=telegram_control_config["chat_id"],
+                miner=self,
+                config_manager=config_manager,
+            )
+
+        if discord_control_config:
+            from TwitchChannelPointsMiner.classes.DiscordControl import DiscordControl
+            self.discord_control = DiscordControl(
+                token=discord_control_config["token"],
+                channel_id=discord_control_config["channel_id"],
+                authorized_user_id=discord_control_config.get("authorized_user_id"),
+                miner=self,
+                config_manager=config_manager,
+            )
 
         self.logs_file, self.queue_listener = configure_loggers(
             self.username, logger_settings
@@ -225,6 +259,15 @@ class TwitchChannelPointsMiner:
             )
             self.running = True
             self.start_datetime = datetime.now()
+
+            # Start control bots FIRST (before mining setup)
+            if self.telegram_control:
+                self.telegram_control.start()
+                logger.info("Telegram Control Bot started.")
+
+            if self.discord_control:
+                self.discord_control.start()
+                logger.info("Discord Control Bot started.")
 
             self.twitch.login()
 
@@ -388,6 +431,7 @@ class TwitchChannelPointsMiner:
                         PubsubTopic("community-points-channel-v1", streamer=streamer)
                     )
 
+
             refresh_context = time.time()
             while self.running:
                 time.sleep(random.uniform(20, 60))
@@ -428,6 +472,13 @@ class TwitchChannelPointsMiner:
                     streamer.irc_chat.join()
 
         self.running = self.twitch.running = False
+
+        # Stop control bots
+        if self.telegram_control:
+            self.telegram_control.stop()
+        if self.discord_control:
+            self.discord_control.stop()
+
         if self.ws_pool is not None:
             self.ws_pool.end()
 
