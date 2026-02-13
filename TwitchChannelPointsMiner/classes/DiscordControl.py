@@ -185,6 +185,11 @@ class DiscordControl(threading.Thread):
         async def cmd_logs(interaction: discord.Interaction):
             await interaction.response.send_message(control._cmd_logs())
 
+        @tree.command(name="bet", description="Kumar/prediction sistemini aç/kapat")
+        @app_commands.check(auth_check)
+        async def cmd_bet(interaction: discord.Interaction):
+            await interaction.response.send_message(control._cmd_bet())
+
         # ── Account Group ─────────────────────────────────────────
         account_group = app_commands.Group(name="account", description="Hesap yönetimi komutları")
 
@@ -403,6 +408,25 @@ class DiscordControl(threading.Thread):
         if self.logging_enabled:
             return "📝 **Canlı Loglar açıldı!**\nKonsola düşen veriler buraya akacak."
         return "📝 **Canlı Loglar kapandı!**"
+
+    def _cmd_bet(self):
+        if not self.config_manager:
+            return "❌ Config yöneticisi bağlı değil."
+        new_state = self.config_manager.toggle_predictions()
+        if new_state:
+            threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+            return (
+                "🎲 **Kumar/Prediction sistemi AÇILDI!**\n"
+                "Bot artık kanallarda bahislere girecek.\n"
+                "🔄 Ayar uygulanması için yeniden başlatılıyor..."
+            )
+        else:
+            threading.Timer(2.0, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+            return (
+                "🚫 **Kumar/Prediction sistemi KAPATILDI!**\n"
+                "Bot sadece izleme puanı ve claim yapacak.\n"
+                "🔄 Ayar uygulanması için yeniden başlatılıyor..."
+            )
 
     # ── Account Commands ──────────────────────────────────────────
 

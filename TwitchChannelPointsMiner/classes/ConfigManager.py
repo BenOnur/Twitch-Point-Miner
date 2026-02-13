@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "channels": [],
     "active_account": None,
     "last_command_source": None,
+    "make_predictions": False,
 }
 
 
@@ -181,3 +182,24 @@ class ConfigManager:
         with self.lock:
             self.config["last_command_source"] = None
             self._save()
+
+    # ── Prediction Settings ──────────────────────────────────────
+
+    def get_make_predictions(self) -> bool:
+        """Get whether predictions/betting is enabled."""
+        with self.lock:
+            return self.config.get("make_predictions", False)
+
+    def set_make_predictions(self, enabled: bool):
+        """Set whether predictions/betting is enabled."""
+        with self.lock:
+            self.config["make_predictions"] = enabled
+            self._save()
+
+    def toggle_predictions(self) -> bool:
+        """Toggle predictions on/off. Returns new state."""
+        with self.lock:
+            current = self.config.get("make_predictions", False)
+            self.config["make_predictions"] = not current
+            self._save()
+            return not current

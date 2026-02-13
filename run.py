@@ -16,7 +16,9 @@ from TwitchChannelPointsMiner import TwitchChannelPointsMiner
 from TwitchChannelPointsMiner.logger import LoggerSettings, ColorPalette
 from TwitchChannelPointsMiner.classes.Chat import ChatPresence
 from TwitchChannelPointsMiner.classes.Settings import Priority, Events, FollowersOrder
-from TwitchChannelPointsMiner.classes.entities.Bet import BetSettings
+from TwitchChannelPointsMiner.classes.entities.Bet import (
+    Strategy, BetSettings, Condition, OutcomeKeys, FilterCondition, DelayMode
+)
 from TwitchChannelPointsMiner.classes.entities.Streamer import Streamer, StreamerSettings
 from TwitchChannelPointsMiner.classes.ConfigManager import ConfigManager
 
@@ -97,8 +99,24 @@ if not account or not channels:
 
 else:
     # ============================================================
-    # MINER BAŞLAT
-    # ============================================================
+    # Kumar ayarini config'den oku
+    predictions_enabled = config.get_make_predictions()
+
+    bet_config = BetSettings(
+        strategy=Strategy.SMART,
+        percentage=5,
+        percentage_gap=20,
+        max_points=50000,
+        stealth_mode=True,
+        delay_mode=DelayMode.FROM_END,
+        delay=6,
+        minimum_points=20000,
+        filter_condition=FilterCondition(
+            by=OutcomeKeys.TOTAL_USERS,
+            where=Condition.LTE,
+            value=800
+        )
+    ) if predictions_enabled else BetSettings()
 
     twitch_miner = TwitchChannelPointsMiner(
         username=account["username"],
@@ -130,18 +148,19 @@ else:
             ),
         ),
         streamer_settings=StreamerSettings(
-            make_predictions=False,
+            make_predictions=predictions_enabled,
             follow_raid=True,
             claim_drops=True,
             claim_moments=True,
             watch_streak=True,
             community_goals=False,
             chat=ChatPresence.ONLINE,
+            bet=bet_config,
         )
     )
 
     twitch_miner.mine(
-        channels,  # config.json'dan okunan kanallar
+        channels,
         followers=False,
         followers_order=FollowersOrder.ASC
     )
