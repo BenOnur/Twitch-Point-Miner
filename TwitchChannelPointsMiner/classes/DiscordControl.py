@@ -1,13 +1,27 @@
-﻿# -*- coding: utf-8 -*-
-
-import asyncio
+﻿import asyncio
 import logging
 import os
 import signal
 import threading
+import queue
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+class DiscordLogHandler(logging.Handler):
+    """Custom logging handler to send logs to Discord."""
+    def __init__(self, discord_control):
+        super().__init__()
+        self.discord_control = discord_control
+
+    def emit(self, record):
+        if self.discord_control.logging_enabled:
+            try:
+                msg = self.format(record)
+                self.discord_control.log_queue.put(msg)
+            except Exception:
+                self.handleError(record)
 
 
 class DiscordControl(threading.Thread):
@@ -26,6 +40,15 @@ class DiscordControl(threading.Thread):
         self.config_manager = config_manager
         self.loop = None
         self.client = None
+        
+        # Log streaming variables
+        self.logging_enabled = False
+        self.log_queue = queue.Queue()
+        self.log_handler = DiscordLogHandler(self)
+        self.log_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        
+        # Attach to root logger
+        logging.getLogger().addHandler(self.log_handler)
 
     def run(self):
         try:
@@ -42,6 +65,9 @@ class DiscordControl(threading.Thread):
         self.client = discord.Client(intents=intents)
 
         control = self
+        
+        # Start log flushing task
+        self.loop.create_task(self._log_loop())
 
         @self.client.event
         async def on_ready():
@@ -79,6 +105,42 @@ class DiscordControl(threading.Thread):
             self.loop.run_until_complete(self.client.start(self.token))
         except Exception as e:
             logger.error(f"Discord Control Bot error: {e}")
+            
+    async def _log_loop(self):
+        """Background task to flush logs to Discord."""
+        while True:
+            if self.logging_enabled and self.client and self.client.is_ready():
+                messages = []
+                while not self.log_queue.empty():
+                    try:
+                        messages.append(self.log_queue.get_nowait())
+                        if len(messages) >= 10:  # Max 10 lines per batch to avoid huge messages
+                            break
+                    except queue.Empty:
+                        break
+                
+                if messages:
+                    text = "\n".join(messages)
+                    # Split if too long (Discord limit 2000 chars)
+                    if len(text) > 1900:
+                        text = text[:1900] + "\n... (truncated)"
+                    
+                    try:
+                        channel = self.client.get_channel(self.channel_id)
+                        if channel:
+                            await channel.send(f"```\n{text}\n```")
+                    except Exception as e:
+                        print(f"Failed to send log to Discord: {e}")
+            
+            # If disabled, clear queue to prevent memory buildup
+            if not self.logging_enabled and not self.log_queue.empty():
+                 try:
+                     while not self.log_queue.empty():
+                         self.log_queue.get_nowait()
+                 except:
+                     pass
+
+            await asyncio.sleep(2)
 
     def stop(self):
         if self.client and self.loop:
@@ -106,6 +168,7 @@ class DiscordControl(threading.Thread):
             "t!uptime": self._cmd_uptime,
             "t!stop": self._cmd_stop,
             "t!start": self._cmd_start,
+            "t!logs": self._cmd_logs,
             "t!help": self._cmd_help,
         }
 
@@ -130,7 +193,8 @@ class DiscordControl(threading.Thread):
             "`t!online` - Online yayıncılar\n"
             "`t!uptime` - Çalışma süresi\n"
             "`t!stop` - Miner'ı durdur\n"
-            "`t!start` - Miner'ı yeniden başlat\n\n"
+            "`t!start` - Miner'ı yeniden başlat\n"
+            "`t!logs` - Canlı logları aç/kapat\n\n"
             "**Hesap Yönetimi:**\n"
             "`t!account add <kullanıcı> <şifre>`\n"
             "`t!account list`\n"
@@ -210,6 +274,15 @@ class DiscordControl(threading.Thread):
         
         os.kill(os.getpid(), signal.SIGTERM)
         return "🔄 Miner yeniden başlatılıyor...\nPM2 otomatik olarak tekrar başlatacak."
+
+    def _cmd_logs(self):
+        self.logging_enabled = not self.logging_enabled
+        status = "açıldı" if self.logging_enabled else "kapandı"
+        if self.logging_enabled:
+            return f"📝 **Canlı Loglar {status}!**\nKonsola düşen veriler (hata/bilgi) buraya akacak."
+        else:
+            return f"📝 **Canlı Loglar {status}!**"
+
 
     # ── Account Commands ────────────────────────────────────────
 
