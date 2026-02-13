@@ -1,15 +1,14 @@
 module.exports = {
     apps: [{
         name: "twitch-miner",
-        script: "run.py",
-        interpreter: "./venv/bin/python3",
-        cwd: "/home/KULLANICI_ADIN/Twitch-Channel-Points-Miner-v2",
+        script: "./run.py",
+        interpreter: "python3",
         autorestart: true,
-        max_restarts: 10,
-        restart_delay: 30000,
         watch: false,
+        max_memory_restart: '500M',
         env: {
-            PYTHONUNBUFFERED: "1"
-        }
-    }]
-};
+            PYTHONUNBUFFERED: "1",
+      # Environment variables will be loaded from .env file by python- dotenv or os
+    }
+  }]
+}
