@@ -84,6 +84,16 @@ class DiscordControl(threading.Thread):
         if self.client and self.loop:
             asyncio.run_coroutine_threadsafe(self.client.close(), self.loop)
 
+    def send_sync(self, message):
+        """Send a message from a non-async context (e.g. from login callback)."""
+        if not self.client or not self.loop:
+            return
+        async def _send():
+            channel = self.client.get_channel(self.channel_id)
+            if channel:
+                await channel.send(message)
+        asyncio.run_coroutine_threadsafe(_send(), self.loop)
+
     def _dispatch(self, cmd, args):
         simple = {
             "t!status": self._cmd_status,

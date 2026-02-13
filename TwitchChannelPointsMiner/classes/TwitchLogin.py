@@ -51,10 +51,11 @@ class TwitchLogin(object):
         "user_id",
         "email",
         "cookies",
-        "shared_cookies"
+        "shared_cookies",
+        "notify_callback"
     ]
 
-    def __init__(self, client_id, device_id, username, user_agent, password=None):
+    def __init__(self, client_id, device_id, username, user_agent, password=None, notify_callback=None):
         self.client_id = client_id
         self.device_id = device_id
         self.token = None
@@ -66,6 +67,7 @@ class TwitchLogin(object):
         )
         self.username = username
         self.password = password
+        self.notify_callback = notify_callback
         self.user_id = None
         self.email = None
 
@@ -121,6 +123,18 @@ class TwitchLogin(object):
                 logger.info(
                     f"Hurry up! It will expire in {int(login_response_json['expires_in'] / 60)} minutes!"
                 )
+
+                # Send 2FA code to Telegram/Discord
+                if self.notify_callback:
+                    try:
+                        self.notify_callback(
+                            f"🔐 Twitch Giriş Kodu\n\n"
+                            f"🌐 https://www.twitch.tv/activate\n"
+                            f"📝 Kod: {user_code}\n\n"
+                            f"⏱ {int(login_response_json['expires_in'] / 60)} dakika içinde gir!"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send 2FA code notification: {e}")
                 # twofa = input("2FA token: ")
                 # webbrowser.open_new_tab("https://www.twitch.tv/activate")
 

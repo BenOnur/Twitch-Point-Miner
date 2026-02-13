@@ -142,7 +142,23 @@ class TwitchChannelPointsMiner:
 
         # user_agent = get_user_agent("FIREFOX")
         user_agent = get_user_agent("CHROME")
-        self.twitch = Twitch(self.username, user_agent, password)
+
+        # Create a callback to send 2FA code to Telegram/Discord
+        def _login_notify(message):
+            import time as _time
+            _time.sleep(3)  # Give bots a moment to connect
+            if self.telegram_control:
+                try:
+                    self.telegram_control.send_message(message)
+                except Exception:
+                    pass
+            if self.discord_control:
+                try:
+                    self.discord_control.send_sync(message)
+                except Exception:
+                    pass
+
+        self.twitch = Twitch(self.username, user_agent, password, notify_callback=_login_notify)
 
         self.claim_drops_startup = claim_drops_startup
         self.priority = priority if isinstance(priority, list) else [priority]
