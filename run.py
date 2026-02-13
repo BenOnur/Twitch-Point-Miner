@@ -16,9 +16,7 @@ from TwitchChannelPointsMiner import TwitchChannelPointsMiner
 from TwitchChannelPointsMiner.logger import LoggerSettings, ColorPalette
 from TwitchChannelPointsMiner.classes.Chat import ChatPresence
 from TwitchChannelPointsMiner.classes.Settings import Priority, Events, FollowersOrder
-from TwitchChannelPointsMiner.classes.entities.Bet import (
-    Strategy, BetSettings, Condition, OutcomeKeys, FilterCondition, DelayMode
-)
+from TwitchChannelPointsMiner.classes.entities.Bet import BetSettings
 from TwitchChannelPointsMiner.classes.entities.Streamer import Streamer, StreamerSettings
 from TwitchChannelPointsMiner.classes.ConfigManager import ConfigManager
 
@@ -132,28 +130,13 @@ else:
             ),
         ),
         streamer_settings=StreamerSettings(
-            make_predictions=True,
+            make_predictions=False,
             follow_raid=True,
             claim_drops=True,
             claim_moments=True,
             watch_streak=True,
             community_goals=False,
             chat=ChatPresence.ONLINE,
-            bet=BetSettings(
-                strategy=Strategy.SMART,
-                percentage=5,
-                percentage_gap=20,
-                max_points=50000,
-                stealth_mode=True,
-                delay_mode=DelayMode.FROM_END,
-                delay=6,
-                minimum_points=20000,
-                filter_condition=FilterCondition(
-                    by=OutcomeKeys.TOTAL_USERS,
-                    where=Condition.LTE,
-                    value=800
-                )
-            )
         )
     )
 
