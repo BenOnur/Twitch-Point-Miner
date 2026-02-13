@@ -515,10 +515,13 @@ class TwitchChannelPointsMiner:
         self.running = self.twitch.running = False
 
         # Stop control bots
+        # Stop control bots
         if self.telegram_control:
             self.telegram_control.stop()
+            self.telegram_control.join()
         if self.discord_control:
             self.discord_control.stop()
+            self.discord_control.join()
 
         if self.ws_pool is not None:
             self.ws_pool.end()

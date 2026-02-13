@@ -82,7 +82,11 @@ class DiscordControl(threading.Thread):
 
     def stop(self):
         if self.client and self.loop:
-            asyncio.run_coroutine_threadsafe(self.client.close(), self.loop)
+            try:
+                future = asyncio.run_coroutine_threadsafe(self.client.close(), self.loop)
+                future.result(timeout=5)
+            except Exception as e:
+                logger.error(f"Error checking Discord close future: {e}")
 
     def send_sync(self, message):
         """Send a message from a non-async context (e.g. from login callback)."""
