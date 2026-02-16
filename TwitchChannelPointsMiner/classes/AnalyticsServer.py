@@ -9,6 +9,7 @@ import pandas as pd
 from flask import Flask, Response, cli, render_template, request
 
 from TwitchChannelPointsMiner.classes.Settings import Settings
+from TwitchChannelPointsMiner.classes.ConfigManager import ConfigManager
 from TwitchChannelPointsMiner.utils import download_file
 
 cli.show_server_banner = lambda *_: None
@@ -17,11 +18,25 @@ logger = logging.getLogger(__name__)
 
 def streamers_available():
     path = Settings.analytics_path
-    return [
-        f
-        for f in os.listdir(path)
-        if os.path.isfile(os.path.join(path, f)) and f.endswith(".json")
-    ]
+    files = set()
+    
+    # Get existing json files
+    if os.path.exists(path):
+        files = {
+            f
+            for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f)) and f.endswith(".json")
+        }
+    
+    # Merge with channels from config
+    try:
+        cm = ConfigManager()
+        for channel in cm.list_channels():
+            files.add(f"{channel.lower()}.json")
+    except Exception as e:
+        logger.error(f"Error reading config channels: {e}")
+
+    return list(files)
 
 
 def aggregate(df, freq="30Min"):
@@ -111,12 +126,12 @@ def read_json(streamer, return_response=True):
 
     # Check if the file exists before attempting to read it
     if not os.path.exists(os.path.join(path, streamer)):
-        error_message = f"File '{streamer}' not found."
-        logger.error(error_message)
+        # Return empty data for new channels
+        empty_data = {"series": [], "annotations": []}
         if return_response:
-            return Response(json.dumps({"error": error_message}), status=404, mimetype="application/json")
+            return Response(json.dumps(empty_data), status=200, mimetype="application/json")
         else:
-            return {"error": error_message}
+            return empty_data
 
     try:
         with open(os.path.join(path, streamer), 'r') as file:
