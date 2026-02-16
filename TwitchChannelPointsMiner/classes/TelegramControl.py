@@ -124,7 +124,7 @@ class TelegramControl(threading.Thread):
         self.running = False
 
         # Log streaming
-        self.logging_enabled = True  # Default enabled
+        self.logging_enabled = False  # Default disabled
         self.log_queue = queue.Queue()
         self.log_handler = TelegramLogHandler(self)
         logging.getLogger().addHandler(self.log_handler)
@@ -133,7 +133,7 @@ class TelegramControl(threading.Thread):
         """Main polling loop."""
         self.running = True
         logger.info("Telegram Control Bot started! Listening for commands...")
-        self.send_message("✅ Twitch Miner Telegram kontrol botu başlatıldı!\n/help yazarak komutları görebilirsin.\n📝 <b>Canlı Loglar AÇIK</b> (/logs ile kapatabilirsin)")
+        self.send_message("✅ Twitch Miner Telegram kontrol botu başlatıldı!\n/help yazarak komutları görebilirsin.\n📝 <b>Canlı Loglar KAPALI</b> (/logs ile açabilirsin)")
         
         # Start log loop
         threading.Thread(target=self._log_loop, daemon=True).start()

@@ -124,7 +124,7 @@ class DiscordControl(threading.Thread):
         self.client = None
 
         # Log streaming
-        self.logging_enabled = False
+        self.logging_enabled = True
         self.log_queue = queue.Queue()
         self.log_handler = DiscordLogHandler(self)
         logging.getLogger().addHandler(self.log_handler)
@@ -308,7 +308,8 @@ class DiscordControl(threading.Thread):
             if channel:
                 await channel.send(
                     "✅ Twitch Miner Discord botu başlatıldı!\n"
-                    "Slash komutları kullanılabilir: `/status`, `/points`, `/logs` vb."
+                    "Slash komutları kullanılabilir: `/status`, `/points`, `/logs` vb.\n"
+                    "📝 **Canlı Loglar AÇIK** (/logs ile kapatabilirsin)"
                 )
 
         # Start log flushing task
