@@ -8,8 +8,103 @@ import time
 from datetime import datetime
 
 import requests
+import re
+import queue
 
 logger = logging.getLogger(__name__)
+
+
+class TelegramLogHandler(logging.Handler):
+    """Custom logging handler to send pretty logs to Telegram."""
+    def __init__(self, telegram_control):
+        super().__init__()
+        self.telegram_control = telegram_control
+
+    def _prettify(self, msg):
+        """Convert a raw log message into a pretty Telegram message with emojis."""
+        msg = re.sub(r'\x1b\[[0-9;]*m', '', msg)
+        msg = re.sub(r'^\[[\w_]+\]:\s*', '', msg.strip())
+
+        # Streamer Online
+        m = re.search(r'Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\) is Online', msg)
+        if m:
+            return f"🟢 <b>{m.group(1)}</b> online oldu! — {m.group(2)} puan"
+
+        # Streamer Offline
+        m = re.search(r'Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\) is Offline', msg)
+        if m:
+            return f"🔴 <b>{m.group(1)}</b> offline oldu — {m.group(2)} puan"
+
+        # Gained channel points
+        m = re.search(r'\+(\d+)\s.*?Streamer\(username=(\w+).*?channel_points=([\d.]+\w*)\)', msg)
+        if m:
+            return f"💰 <b>{m.group(2)}</b> +{m.group(1)} puan → {m.group(3)}"
+
+        # Claim bonus
+        if "Claim" in msg and "bonus" in msg.lower():
+            m = re.search(r'Streamer\(username=(\w+)', msg)
+            name = m.group(1) if m else "?"
+            return f"🎁 <b>{name}</b> bonus claim edildi!"
+
+        # Watch streak
+        if "Watch Streak" in msg or "watch streak" in msg:
+            m = re.search(r'Streamer\(username=(\w+)', msg)
+            name = m.group(1) if m else "?"
+            return f"🔥 <b>{name}</b> watch streak!"
+
+        # Prediction / Bet
+        if "bet" in msg.lower() or "prediction" in msg.lower():
+            if "won" in msg.lower() or "win" in msg.lower():
+                return f"🏆 {msg.strip()}"
+            elif "lose" in msg.lower() or "lost" in msg.lower():
+                return f"💸 {msg.strip()}"
+            return f"🎲 {msg.strip()}"
+
+        # Drop claimed
+        if "drop" in msg.lower() and "claim" in msg.lower():
+            return f"🎁 {msg.strip()}"
+
+        # Moment
+        if "moment" in msg.lower():
+            return f"⚡ {msg.strip()}"
+
+        # Join IRC Chat
+        if "Join IRC Chat" in msg:
+            m = re.search(r'Join IRC Chat:\s*(\w+)', msg)
+            if m:
+                return f"💬 <b>{m.group(1)}</b> chat'e katılındı"
+            return f"💬 {msg.strip()}"
+
+        # Login
+        if "login" in msg.lower():
+            return f"🔐 {msg.strip()}"
+
+        # Session start
+        if "Start session" in msg:
+            return f"🚀 {msg.strip()}"
+
+        return msg.strip()
+
+    def emit(self, record):
+        if not self.telegram_control.logging_enabled:
+            return
+        if not record.name.startswith("TwitchChannelPointsMiner"):
+            return
+        if record.levelno < logging.INFO:
+            return
+
+        try:
+            raw_msg = record.getMessage()
+            pretty = self._prettify(raw_msg)
+
+            if record.levelno >= logging.ERROR:
+                pretty = f"❌ <b>HATA:</b> {pretty}"
+            elif record.levelno >= logging.WARNING:
+                pretty = f"⚠️ {pretty}"
+
+            self.telegram_control.log_queue.put(pretty)
+        except Exception:
+            self.handleError(record)
 
 
 class TelegramControl(threading.Thread):
@@ -28,11 +123,20 @@ class TelegramControl(threading.Thread):
         self.last_update_id = 0
         self.running = False
 
+        # Log streaming
+        self.logging_enabled = True  # Default enabled
+        self.log_queue = queue.Queue()
+        self.log_handler = TelegramLogHandler(self)
+        logging.getLogger().addHandler(self.log_handler)
+
     def run(self):
         """Main polling loop."""
         self.running = True
         logger.info("Telegram Control Bot started! Listening for commands...")
-        self.send_message("✅ Twitch Miner Telegram kontrol botu başlatıldı!\n/help yazarak komutları görebilirsin.")
+        self.send_message("✅ Twitch Miner Telegram kontrol botu başlatıldı!\n/help yazarak komutları görebilirsin.\n📝 <b>Canlı Loglar AÇIK</b> (/logs ile kapatabilirsin)")
+        
+        # Start log loop
+        threading.Thread(target=self._log_loop, daemon=True).start()
 
         # Flush old messages first
         self._flush_pending_updates()
@@ -113,6 +217,7 @@ class TelegramControl(threading.Thread):
             "/uptime": self._cmd_uptime,
             "/stop": self._cmd_stop,
             "/start": self._cmd_start,
+            "/logs": self._cmd_logs,
             "/help": self._cmd_help,
         }
 
@@ -145,6 +250,35 @@ class TelegramControl(threading.Thread):
         except Exception as e:
             logger.error(f"Telegram send error: {e}")
 
+    def _log_loop(self):
+        """Background loop to flush logs to Telegram."""
+        while self.running:
+            if self.logging_enabled:
+                messages = []
+                while not self.log_queue.empty():
+                    try:
+                        messages.append(self.log_queue.get_nowait())
+                        if len(messages) >= 5:  # Batch smaller for Telegram to avoid rate limits
+                            break
+                    except queue.Empty:
+                        break
+
+                if messages:
+                    text = "\n".join(messages)
+                    if len(text) > 4000:
+                        text = text[:4000] + "\n... (truncated)"
+                    self.send_message(text)
+
+            # Clear queue if disabled to avoid buildup
+            if not self.logging_enabled and not self.log_queue.empty():
+                try:
+                    while not self.log_queue.empty():
+                        self.log_queue.get_nowait()
+                except Exception:
+                    pass
+
+            time.sleep(2)
+
     # ── Simple Commands ─────────────────────────────────────────
 
     def _cmd_help(self):
@@ -156,7 +290,8 @@ class TelegramControl(threading.Thread):
             "/online - Online yayıncılar\n"
             "/uptime - Çalışma süresi\n"
             "/stop - Miner'ı durdur\n"
-            "/start - Miner'ı yeniden başlat\n\n"
+            "/start - Miner'ı yeniden başlat\n"
+            "/logs - Canlı logları aç/kapat\n\n"
             "<b>Hesap Yönetimi:</b>\n"
             "/account add &lt;kullanıcı&gt; &lt;şifre&gt;\n"
             "/account list\n"
@@ -258,7 +393,15 @@ class TelegramControl(threading.Thread):
             "🔄 Miner yeniden başlatılıyor...\n"
             "PM2 otomatik olarak tekrar başlatacak."
         )
+        )
         os.kill(os.getpid(), signal.SIGTERM)
+
+    def _cmd_logs(self):
+        self.logging_enabled = not self.logging_enabled
+        if self.logging_enabled:
+            self.send_message("📝 <b>Canlı Loglar açıldı!</b>\nKonsola düşen veriler buraya akacak.")
+        else:
+            self.send_message("📝 <b>Canlı Loglar kapandı!</b>")
 
     # ── Account Commands ────────────────────────────────────────
 
