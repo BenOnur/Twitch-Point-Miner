@@ -393,7 +393,7 @@ class TelegramControl(threading.Thread):
             "🔄 Miner yeniden başlatılıyor...\n"
             "PM2 otomatik olarak tekrar başlatacak."
         )
-        )
+
         os.kill(os.getpid(), signal.SIGTERM)
 
     def _cmd_logs(self):
