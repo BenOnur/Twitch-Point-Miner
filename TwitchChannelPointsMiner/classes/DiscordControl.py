@@ -89,6 +89,10 @@ class DiscordLogHandler(logging.Handler):
             return
         if not record.name.startswith("TwitchChannelPointsMiner"):
             return
+        # Prevent recursion: ignore logs from this module or network/discord libraries if they leak into root logger
+        if "DiscordControl" in record.name or "discord" in record.name.lower() or "requests" in record.name.lower():
+            return
+
         if record.levelno < logging.INFO:
             return
 

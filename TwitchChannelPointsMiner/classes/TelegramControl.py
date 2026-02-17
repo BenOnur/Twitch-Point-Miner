@@ -90,6 +90,10 @@ class TelegramLogHandler(logging.Handler):
             return
         if not record.name.startswith("TwitchChannelPointsMiner"):
             return
+        # Prevent recursion: ignore logs from this module or network libraries
+        if "TelegramControl" in record.name or "requests" in record.name.lower() or "urllib3" in record.name.lower():
+            return
+
         if record.levelno < logging.INFO:
             return
 

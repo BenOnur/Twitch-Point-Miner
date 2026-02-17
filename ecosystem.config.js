@@ -5,7 +5,8 @@ module.exports = {
         interpreter: "./venv/bin/python3",
         autorestart: true,
         watch: false,
-        max_memory_restart: "500M",
+        ignore_watch: ["node_modules", "logs", "analytics", "*.json"],
+        exp_backoff_restart_delay: 100,
         env: {
             PYTHONUNBUFFERED: "1"
         }
