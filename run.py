@@ -135,7 +135,7 @@ else:
             Priority.DROPS,
             Priority.ORDER
         ],
-        enable_analytics=True,
+        enable_analytics=config.get_analytics_enabled(),
         disable_ssl_cert_verification=False,
         telegram_control_config=TELEGRAM_CONFIG,
         discord_control_config=DISCORD_CONFIG,
@@ -167,7 +167,8 @@ else:
         )
     )
 
-    twitch_miner.analytics(host="0.0.0.0", port=5000, refresh=5, days_ago=7)
+    if config.get_analytics_enabled():
+        twitch_miner.analytics(host="0.0.0.0", port=5000, refresh=5, days_ago=7)
     twitch_miner.mine(
         channels,
         followers=False,

@@ -24,6 +24,7 @@ DEFAULT_CONFIG = {
         "min_points": 20000,
         "delay": 6,
     },
+    "enable_analytics": False,
 }
 
 
@@ -74,6 +75,13 @@ class ConfigManager:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
+
+    # ── Analytics Settings ──────────────────────────────────────
+
+    def get_analytics_enabled(self) -> bool:
+        """Check if analytics server should be enabled."""
+        with self.lock:
+            return self.config.get("enable_analytics", False)
 
     # ── Account Management ──────────────────────────────────────
 
