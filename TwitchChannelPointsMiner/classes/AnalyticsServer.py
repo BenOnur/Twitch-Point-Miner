@@ -28,13 +28,7 @@ def streamers_available():
             if os.path.isfile(os.path.join(path, f)) and f.endswith(".json")
         }
     
-    # Merge with channels from config
-    try:
-        cm = ConfigManager()
-        for channel in cm.list_channels():
-            files.add(f"{channel.lower()}.json")
-    except Exception as e:
-        logger.error(f"Error reading config channels: {e}")
+
 
     return list(files)
 
@@ -70,7 +64,7 @@ def filter_datas(start_date, end_date, datas):
 
     original_series = datas["series"]
 
-    if "series" in datas and datas["series"]:
+    if "series" in datas:
         df = pd.DataFrame(datas["series"])
         df["datetime"] = pd.to_datetime(df.x // 1000, unit="s")
 
@@ -86,7 +80,7 @@ def filter_datas(start_date, end_date, datas):
 
     # If no data is found within the timeframe, that usually means the streamer hasn't streamed within that timeframe
     # We create a series that shows up as a straight line on the dashboard, with 'No Stream' as labels
-    if len(datas["series"]) == 0 and original_series:
+    if len(datas["series"]) == 0:
         new_end_date = start_date
         new_start_date = 0
         df = pd.DataFrame(original_series)
