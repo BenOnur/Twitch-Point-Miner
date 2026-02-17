@@ -70,7 +70,7 @@ def filter_datas(start_date, end_date, datas):
 
     original_series = datas["series"]
 
-    if "series" in datas:
+    if "series" in datas and datas["series"]:
         df = pd.DataFrame(datas["series"])
         df["datetime"] = pd.to_datetime(df.x // 1000, unit="s")
 
