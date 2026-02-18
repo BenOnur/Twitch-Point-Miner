@@ -492,7 +492,8 @@ class Twitch(object):
                             "isLive": True,
                             "isVod": False,
                             "vodID": "",
-                            "playerType": "site"
+                            "playerType": "site",
+                            "platform": "web"
                             # "playerType": "picture-by-picture",
                         }
 
